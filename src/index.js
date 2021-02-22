@@ -31,6 +31,7 @@ class App extends React.Component {
   videoRef = React.createRef();
   canvasRef = React.createRef();
   predictions = null
+  prevImg = null
   
   componentDidMount() {
 
@@ -64,21 +65,31 @@ class App extends React.Component {
   }
 
   detectFrame = (video, model, loop_count) => {
-      tf.engine().startScope();
-      const img = tf.browser.fromPixels(video).toFloat();
-      if (loop_count === 0 || loop_count % 3 !== 0) {
-        this.predictions = model.predict(this.process_input(img)).arraySync();
-      }
-      // console.log(loop_count, this.predictions)
-      this.renderPredictions(img, tf.tensor(this.predictions));
-      loop_count = loop_count + 1
-      if (loop_count > 10000) {
-        loop_count = 0
-      }
-      requestAnimationFrame(() => {
-        this.detectFrame(video, model, loop_count);
-      });
-      tf.engine().endScope();
+    tf.engine().startScope();
+    let infVal = null;
+    let img = tf.browser.fromPixels(video).toFloat();
+    img = tf.image.resizeBilinear(img, [224, 224])
+    // console.log(img.shape)
+    if (this.prevImg !== null) {
+      // get the diff of current image and prev image
+      // compute a value which will determine whether to perform inference in current iteration
+      infVal = img.sub(tf.tensor(this.prevImg)).mean().abs().dataSync()[0]
+    }
+    if (loop_count === 0 || infVal > 0.2) {//loop_count % 3 !== 0) {
+      console.log("pred", loop_count)
+      this.predictions = model.predict(this.process_input(img)).arraySync();
+    }
+    // console.log(loop_count, this.predictions)
+    this.renderPredictions(img, tf.tensor(this.predictions));
+    loop_count = loop_count + 1
+    if (loop_count > 10000) {
+      loop_count = 0
+    }
+    this.prevImg = img.arraySync()
+    requestAnimationFrame(() => {
+      this.detectFrame(video, model, loop_count);
+    });
+    tf.engine().endScope();
   };
 
   process_input(img){
@@ -90,23 +101,24 @@ class App extends React.Component {
     const batched = normalised.transpose([2,0,1]).expandDims();
     return batched;
   };
+  
   renderPredictions = async (img, predictions) => {
-    const img_shape = [240, 240]
+    let dim = 224
+    const img_shape = [dim, dim]
     const offset = 0;
     const segmPred = tf.image.resizeBilinear(predictions.transpose([0,2,3,1]),
                                               img_shape);
     let back_img_pixels = tf.browser.fromPixels(document.getElementById("myimg")).toFloat();
-    // back_img_pixels = tf.image.resizeBilinear(back_img_pixels, img_shape)
-    img = tf.image.resizeBilinear(img, img_shape)
+    // img = tf.image.resizeBilinear(img, img_shape)
     let segmMask = segmPred.argMax(3).reshape(img_shape);
       //Class person id - 0
-    let personMask = tf.fill([240,240], 0)
+    let personMask = tf.fill([dim,dim], 0)
     segmMask = segmMask.equal(personMask)
 
     //Change Background    
-    segmMask = segmMask.broadcastTo([3, 240, 240]).transpose([1,2,0])
+    segmMask = segmMask.broadcastTo([3, dim, dim]).transpose([1,2,0])
     let final_img = back_img_pixels.where(segmMask, img)
-    let alphaChannel = tf.fill([240,240,1], 255) 
+    let alphaChannel = tf.fill([dim,dim,1], 255) 
     final_img = tf.concat([final_img, alphaChannel], 2)
     final_img = tf.image.resizeBilinear(final_img, [480, 480]);
     let img_buff = await final_img.data()
@@ -155,7 +167,7 @@ class App extends React.Component {
       <div>
         <h1>Real-Time Semantic Segmentation</h1>
         <h3>Refine Net</h3>
-        <img id="myimg" src={process.env.PUBLIC_URL + '/images/sky.jpg'} alt="sky" height="240" width="240"/>
+        <img id="myimg" src={process.env.PUBLIC_URL + '/images/sky.jpg'} alt="sky" height="224" width="224"/>
         <video
           style={{marginTop:480, height: '600px', width: "480px"}}
           className="size"
