@@ -1,6 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import * as tf from '@tensorflow/tfjs';
+//uncomment below 2 lines for WASM Backend
+// import '@tensorflow/tfjs-backend-wasm';
+// import {setWasmPaths} from '@tensorflow/tfjs-backend-wasm';
 import "./styles.css";
 tf.setBackend('webgl');
 
@@ -21,7 +24,10 @@ const pascalvoc = [[ 0,0,0 ],[ 128,0,0 ],[ 0,128,0 ],
 
 
 async function load_model() {
-  const model = await tf.loadLayersModel("http://127.0.0.1:8080/model.json");
+  //uncomment below 2 lines for WASM Backend
+  // setWasmPaths('http://localhost:9001/'); // or tf.wasm.setWasmPaths when using <script> tags.
+  // await tf.setBackend('wasm');
+  const model = await tf.loadLayersModel("http://localhost:9001/model.json");
   return model;
 }
 
@@ -76,10 +82,9 @@ class App extends React.Component {
       infVal = img.sub(tf.tensor(this.prevImg)).mean().abs().dataSync()[0]
     }
     if (loop_count === 0 || infVal > 0.2) {//loop_count % 3 !== 0) {
-      console.log("pred", loop_count)
+      // console.log("pred", loop_count)
       this.predictions = model.predict(this.process_input(img)).arraySync();
     }
-    // console.log(loop_count, this.predictions)
     this.renderPredictions(img, tf.tensor(this.predictions));
     loop_count = loop_count + 1
     if (loop_count > 10000) {
@@ -112,13 +117,13 @@ class App extends React.Component {
     // img = tf.image.resizeBilinear(img, img_shape)
     let segmMask = segmPred.argMax(3).reshape(img_shape);
       //Class person id - 0
-    let personMask = tf.fill([dim,dim], 0)
+    let personMask = tf.fill([dim,dim], 0, 'int32')
     segmMask = segmMask.equal(personMask)
 
     //Change Background    
     segmMask = segmMask.broadcastTo([3, dim, dim]).transpose([1,2,0])
     let final_img = back_img_pixels.where(segmMask, img)
-    let alphaChannel = tf.fill([dim,dim,1], 255) 
+    let alphaChannel = tf.fill([dim,dim,1], 255, 'int32') 
     final_img = tf.concat([final_img, alphaChannel], 2)
     final_img = tf.image.resizeBilinear(final_img, [480, 480]);
     let img_buff = await final_img.data()

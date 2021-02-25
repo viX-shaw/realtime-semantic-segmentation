@@ -29,6 +29,13 @@ Once you have the program installed, go to the weights folder, run the command b
 
 `http-server -c1 --cors .`
 
+or use
+
+`npx serve weights -l 9001 --cors`
+if serve is not installed, install with `npm i serve`
+serves WASM files correctly
+
+
 To install the required packages, it can be used `npm` or `yarn`. 
 
 If you are using  `yarn`:

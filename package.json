@@ -6,16 +6,21 @@
   "main": "src/index.js",
   "dependencies": {
     "@tensorflow-models/coco-ssd": "^0.1.1",
-    "@tensorflow/tfjs": "^1.7.4",
-    "@tensorflow/tfjs-node": "^1.7.4",
+    "@tensorflow/tfjs": "^3.2.0",
+    "@tensorflow/tfjs-backend-wasm": "^3.2.0",
+    "@tensorflow/tfjs-core": "^3.2.0",
+    "@tensorflow/tfjs-node": "^3.2.0",
     "array-to-image": "^1.0.0",
     "aws-sdk": "^2.678.0",
+    "express": "^4.17.1",
     "node-gyp": "^6.1.0",
     "node-pre-gyp": "^0.14.0",
     "react": "16.5.2",
     "react-dom": "16.5.2",
     "react-magic-dropzone": "1.0.1",
     "react-scripts": "2.0.3",
+    "serve": "^11.3.2",
+    "type-is": "^1.6.18",
     "webgl": "0.0.7"
   },
   "devDependencies": {},
@@ -24,6 +29,12 @@
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject"
+  },
+  "staticFiles": {
+    "staticPath": "./node_modules/@tensorflow/tfjs-backend-wasm/dist",
+    "excludeGlob": [
+      "**/!(*.wasm)"
+    ]
   },
   "browserslist": [
     ">0.2%",
