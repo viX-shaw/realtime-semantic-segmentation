@@ -5,6 +5,8 @@ import * as tf from '@tensorflow/tfjs';
 // import '@tensorflow/tfjs-backend-wasm';
 // import {setWasmPaths} from '@tensorflow/tfjs-backend-wasm';
 import "./styles.css";
+
+tf.enableProdMode();
 tf.setBackend('webgl');
 
 const pascalvoc = [[ 0,0,0 ],[ 128,0,0 ],[ 0,128,0 ],
@@ -73,26 +75,27 @@ class App extends React.Component {
   detectFrame = (video, model, loop_count) => {
     tf.engine().startScope();
     let infVal = null;
-    let img = tf.browser.fromPixels(video).toFloat();
-    img = tf.image.resizeBilinear(img, [224, 224])
+    let image = tf.image.resizeBilinear(tf.browser.fromPixels(video).toFloat(), [480, 480]);
+    let img = tf.image.resizeBilinear(image, [160, 160])
     // console.log(img.shape)
     if (this.prevImg !== null) {
       // get the diff of current image and prev image
       // compute a value which will determine whether to perform inference in current iteration
       infVal = img.sub(tf.tensor(this.prevImg)).mean().abs().dataSync()[0]
     }
-    if (loop_count === 0 || infVal > 0.2) {//loop_count % 3 !== 0) {
+    if (loop_count === 0 || infVal > 0.25) {//loop_count % 3 !== 0) {
       // console.log("pred", loop_count)
       this.predictions = model.predict(this.process_input(img)).arraySync();
     }
-    this.renderPredictions(img, tf.tensor(this.predictions));
+    this.renderPredictions(image, tf.tensor(this.predictions));
     loop_count = loop_count + 1
     if (loop_count > 10000) {
       loop_count = 0
     }
     this.prevImg = img.arraySync()
     requestAnimationFrame(() => {
-      this.detectFrame(video, model, loop_count);
+      // this.detectFrame(video, model, loop_count);
+      setTimeout(this.detectFrame, 85, video, model, loop_count)
     });
     tf.engine().endScope();
   };
@@ -108,7 +111,7 @@ class App extends React.Component {
   };
   
   renderPredictions = async (img, predictions) => {
-    let dim = 224
+    let dim = 480
     const img_shape = [dim, dim]
     const offset = 0;
     const segmPred = tf.image.resizeBilinear(predictions.transpose([0,2,3,1]),
@@ -125,7 +128,7 @@ class App extends React.Component {
     let final_img = back_img_pixels.where(segmMask, img)
     let alphaChannel = tf.fill([dim,dim,1], 255, 'int32') 
     final_img = tf.concat([final_img, alphaChannel], 2)
-    final_img = tf.image.resizeBilinear(final_img, [480, 480]);
+    // final_img = tf.image.resizeBilinear(final_img, [480, 480]);
     let img_buff = await final_img.data()
 
     //Background blur
@@ -172,16 +175,19 @@ class App extends React.Component {
       <div>
         <h1>Real-Time Semantic Segmentation</h1>
         <h3>Refine Net</h3>
-        <img id="myimg" src={process.env.PUBLIC_URL + '/images/sky.jpg'} alt="sky" height="224" width="224"/>
+        {/* <img id="myimg" src={process.env.PUBLIC_URL + '/images/sky.jpg'} 
+         */}
+        <img id="myimg" src={process.env.PUBLIC_URL + '/images/walls.jpeg'} 
+          style={{opacity: 0}} alt="sky" height="480" width="480"/>
         <video
-          style={{marginTop:480, height: '600px', width: "480px"}}
+          style={{marginTop:480, height: '600px', width: "480px", opacity: 0}}
           className="size"
           autoPlay
           playsInline
           muted
           ref={this.videoRef}
-          width= "240"
-          height= "240"
+          width= "480"
+          height= "480"
         />
         <canvas
           className="size"

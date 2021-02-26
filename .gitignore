@@ -1,2 +1,5 @@
 node_modules
 .cache
+weights2
+weights3
+.gitignore
