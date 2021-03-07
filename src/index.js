@@ -4,6 +4,7 @@ import * as tf from '@tensorflow/tfjs';
 //uncomment below 2 lines for WASM Backend
 // import '@tensorflow/tfjs-backend-wasm';
 // import {setWasmPaths} from '@tensorflow/tfjs-backend-wasm';
+import { getAverageKernel, getGaussianKernel, blur } from "./gaussianBlur"
 import "./styles.css";
 
 tf.enableProdMode();
@@ -34,6 +35,8 @@ async function load_model() {
 }
 
 const modelPromise = load_model();
+const kernel = getGaussianKernel(11)
+const avgK = getAverageKernel(3)
 
 class App extends React.Component {
   videoRef = React.createRef();
@@ -76,14 +79,17 @@ class App extends React.Component {
     tf.engine().startScope();
     let infVal = null;
     let image = tf.image.resizeBilinear(tf.browser.fromPixels(video).toFloat(), [480, 480]);
-    let img = tf.image.resizeBilinear(image, [160, 160])
+    let dim = [128, 128, 128]
+    let sleeps = [50, 50, 65]
+    let img = tf.image.resizeBilinear(image, [dim[loop_count%3], dim[loop_count%3]])
     // console.log(img.shape)
     if (this.prevImg !== null) {
       // get the diff of current image and prev image
       // compute a value which will determine whether to perform inference in current iteration
-      infVal = img.sub(tf.tensor(this.prevImg)).mean().abs().dataSync()[0]
+      this.prevImg = tf.image.resizeBilinear(tf.tensor(this.prevImg), [dim[loop_count%3], dim[loop_count%3]])
+      infVal = img.sub(this.prevImg).mean().abs().dataSync()[0]
     }
-    if (loop_count === 0 || infVal > 0.25) {//loop_count % 3 !== 0) {
+    if (loop_count === 0 || infVal > 0.1) {//loop_count % 3 !== 0) {
       // console.log("pred", loop_count)
       this.predictions = model.predict(this.process_input(img)).arraySync();
     }
@@ -95,7 +101,7 @@ class App extends React.Component {
     this.prevImg = img.arraySync()
     requestAnimationFrame(() => {
       // this.detectFrame(video, model, loop_count);
-      setTimeout(this.detectFrame, 85, video, model, loop_count)
+      setTimeout(this.detectFrame, sleeps[loop_count%3], video, model, loop_count)
     });
     tf.engine().endScope();
   };
@@ -121,15 +127,30 @@ class App extends React.Component {
     let segmMask = segmPred.argMax(3).reshape(img_shape);
       //Class person id - 0
     let personMask = tf.fill([dim,dim], 0, 'int32')
-    segmMask = segmMask.equal(personMask)
+    segmMask = segmMask.equal(personMask).logicalNot()
+    let newsegMask = tf.fill([dim, dim], 255).where(segmMask, tf.fill([dim, dim], 0))
+    newsegMask = tf.image.resizeBilinear(tf.reshape(newsegMask, [dim, dim, 1]), [64, 64])
+    newsegMask = tf.image.resizeBilinear(blur(newsegMask, avgK), [dim, dim])
+    // img = img.mul(newsegMask.squeeze().divNoNan(tf.scalar(255)).broadcastTo([3, dim, dim]).transpose([1,2,0]))
+    img = tf.concat([img, newsegMask], 2)
+    // img = tf.concat([img, tf.fill([dim,dim,1], 255, 'int32')], 2)
+    back_img_pixels = tf.concat([back_img_pixels, newsegMask.sub(tf.scalar(255)).abs()], 2)
 
     //Change Background    
-    segmMask = segmMask.broadcastTo([3, dim, dim]).transpose([1,2,0])
-    let final_img = back_img_pixels.where(segmMask, img)
-    let alphaChannel = tf.fill([dim,dim,1], 255, 'int32') 
-    final_img = tf.concat([final_img, alphaChannel], 2)
-    // final_img = tf.image.resizeBilinear(final_img, [480, 480]);
-    let img_buff = await final_img.data()
+    segmMask = segmMask.broadcastTo([4, dim, dim]).transpose([1,2,0])
+    // let n_img = img.where(segmMask, tf.fill([dim,dim,3], 255, 'int32'))
+    // n_img = tf.image.resizeBilinear(blur(n_img, kernel), [dim, dim])
+    // img = n_img.where(segmMask, img)
+
+    // back_img_pixels = tf.concat([back_img_pixels, tf.fill([dim,dim,1], 200, 'int32')], 2)
+    let final_img = img.where(segmMask, back_img_pixels)
+    // let alphaChannel = tf.fill([dim,dim,1], 200, 'int32') 
+    // final_img = tf.concat([final_img, newsegMask], 2)
+    let img_buff = await final_img.data() //final_img
+
+    // show blurred segMask
+    // newsegMask = newsegMask.squeeze()
+    // let img_buff = await tf.concat([newsegMask.broadcastTo([3, dim, dim]).transpose([1,2,0]), tf.fill([dim, dim, 1], 255)], 2).data()
 
     //Background blur
     // segmMask = segmMask.broadcastTo([1, 480, 480]).transpose([1,2,0])
